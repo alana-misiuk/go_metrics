@@ -17,7 +17,7 @@ func NewHandler(storage repository.Storage) *Handler {
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-        w.WriteHeader(http.StatusMethodNotAllowed)
+        w.WriteHeader(http.StatusBadRequest)
         return
     }
 	segments := strings.Split(r.URL.Path, "/")
