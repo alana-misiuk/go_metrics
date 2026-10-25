@@ -33,40 +33,6 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 
 	if segments[2] == "gauge" {
 		value, err := strconv.ParseFloat(segments[4], 64)
-		if err == nil {
-			h.storage.UpdateGauge(segments[3], value)
-		}
-	}
-
-	if segments[2] == "counter" {
-		value, err := strconv.ParseInt(segments[4], 10, 64)
-		if err == nil {
-			h.storage.UpdateCounter(segments[3], value)
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/plan")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-        w.WriteHeader(http.StatusMethodNotAllowed)
-        return
-    }
-	segments := strings.Split(r.URL.Path, "/")
-	if len(segments) < 5 {
-		w.WriteHeader(http.StatusNotFound)
-        return
-	}
-
-	if segments[2] != "gauge" &&  segments[2] != "counter" {
-		w.WriteHeader(http.StatusBadRequest)
-        return
-	}
-
-	if segments[2] == "gauge" {
-		value, err := strconv.ParseFloat(segments[4], 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
         	return
@@ -78,7 +44,7 @@ func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
 		value, err := strconv.ParseInt(segments[4], 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-        	return
+			return
 		}
 		h.storage.UpdateCounter(segments[3], value)
 	}
