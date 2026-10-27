@@ -109,9 +109,13 @@ func SendMetrics(stats *AgentStats) {
 
 	for name, value := range gauges {
 		url := fmt.Sprintf("%s/gauge/%s/%v", base, name, value)
-		http.Post(url, "text/plain", nil)
+		if resp, err := http.Post(url, "text/plain", nil); err == nil {
+			resp.Body.Close()
+		}
 	}
 
 	url := fmt.Sprintf("%s/counter/PollCount/%d", base, stats.PollCount)
-	http.Post(url, "text/plain", nil)
+	if resp, err := http.Post(url, "text/plain", nil); err == nil {
+		resp.Body.Close()
+	}
 }
