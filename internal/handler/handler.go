@@ -22,6 +22,11 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	rawValue := chi.URLParam(r, "value")
 
+	if name == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	switch metricType {
 	case "gauge":
 		value, err := strconv.ParseFloat(rawValue, 64)
