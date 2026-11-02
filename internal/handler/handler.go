@@ -18,6 +18,11 @@ func NewHandler(storage repository.Storage) *Handler {
 }
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	metricType := chi.URLParam(r, "type")
 	name := chi.URLParam(r, "name")
 	rawValue := chi.URLParam(r, "value")
