@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"fmt"
 	"go_metrics/internal/repository"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
-    storage repository.Storage
+	storage repository.Storage
 }
 
 func NewHandler(storage repository.Storage) *Handler {
@@ -16,39 +18,72 @@ func NewHandler(storage repository.Storage) *Handler {
 }
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
-	segments := strings.Split(r.URL.Path, "/")
-	if len(segments) < 5 {
-		w.WriteHeader(http.StatusNotFound)
-        return
-	}
+	metricType := chi.URLParam(r, "type")
+	name := chi.URLParam(r, "name")
+	rawValue := chi.URLParam(r, "value")
 
-	if segments[2] != "gauge" &&  segments[2] != "counter" {
-		w.WriteHeader(http.StatusBadRequest)
-        return
-	}
-
-	if segments[2] == "gauge" {
-		value, err := strconv.ParseFloat(segments[4], 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-        	return
-		}
-		h.storage.UpdateGauge(segments[3], value)
-	}
-
-	if segments[2] == "counter" {
-		value, err := strconv.ParseInt(segments[4], 10, 64)
+	switch metricType {
+	case "gauge":
+		value, err := strconv.ParseFloat(rawValue, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		h.storage.UpdateCounter(segments[3], value)
+		h.storage.UpdateGauge(name, value)
+	case "counter":
+		value, err := strconv.ParseInt(rawValue, 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		h.storage.UpdateCounter(name, value)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
-	w.Header().Set("Content-Type", "text/plan")
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	name := chi.URLParam(r, "name")
+
+	w.Header().Set("Content-Type", "text/plain")
+
+	switch metricType {
+	case "gauge":
+		value, err := h.storage.GetGauge(name)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		fmt.Fprint(w, value)
+	case "counter":
+		value, err := h.storage.GetCounter(name)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		fmt.Fprint(w, value)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+	}
+}
+
+func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+
+	html := "<html><body><h1>Metrics</h1><ul>"
+	for name, value := range h.storage.GetAllGauges() {
+		html += fmt.Sprintf("<li>%s (gauge) = %v</li>", name, value)
+	}
+	for name, value := range h.storage.GetAllCounters() {
+		html += fmt.Sprintf("<li>%s (counter) = %v</li>", name, value)
+	}
+	html += "</ul></body></html>"
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, html)
 }
