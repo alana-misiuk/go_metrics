@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"go_metrics/internal/handler"
 	"go_metrics/internal/repository"
 	"net/http"
@@ -9,6 +10,9 @@ import (
 )
 
 func main() {
+	addr := flag.String("a", "localhost:8080", "server address")
+	flag.Parse()
+
 	storage := repository.NewMemStorage()
 	h := handler.NewHandler(storage)
 
@@ -17,5 +21,5 @@ func main() {
 	r.Get("/value/{type}/{name}", h.GetMetric)
 	r.Get("/", h.GetAllMetrics)
 
-	http.ListenAndServe(":8080", r)
+	http.ListenAndServe(*addr, r)
 }

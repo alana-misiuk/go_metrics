@@ -73,8 +73,8 @@ func CollectMetrics(stats *AgentStats) {
 	stats.RandomValue = rand.Float64()
 }
 
-func SendMetrics(stats *AgentStats) {
-	const base = "http://localhost:8080/update"
+func SendMetrics(stats *AgentStats, serverURL string) {
+	base := serverURL + "/update"
 
 	gauges := map[string]float64{
 		"Alloc":         stats.Alloc,
