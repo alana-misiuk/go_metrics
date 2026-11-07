@@ -16,11 +16,11 @@ var (
 )
 
 type Storage interface {
-	UpdateGauge(name string, value float64)
+	UpdateGauge(name string, value float64) error
 	GetGauge(name string) (float64, error)
 	GetAllGauges() map[string]float64
 
-	UpdateCounter(name string, value int64)
+	UpdateCounter(name string, value int64) error
 	GetCounter(name string) (int64, error)
 	GetAllCounters() map[string]int64
 }
@@ -44,13 +44,17 @@ func (s *MetricsService) Update(metricType, name, rawValue string) error {
 		if err != nil {
 			return fmt.Errorf("%w: %q is not a float", ErrInvalidValue, rawValue)
 		}
-		s.storage.UpdateGauge(name, value)
+		if err := s.storage.UpdateGauge(name, value); err != nil {
+			return fmt.Errorf("update gauge %q: %w", name, err)
+		}
 	case models.Counter:
 		value, err := strconv.ParseInt(rawValue, 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %q is not an integer", ErrInvalidValue, rawValue)
 		}
-		s.storage.UpdateCounter(name, value)
+		if err := s.storage.UpdateCounter(name, value); err != nil {
+			return fmt.Errorf("update counter %q: %w", name, err)
+		}
 	default:
 		return fmt.Errorf("%w: %q", ErrUnknownType, metricType)
 	}

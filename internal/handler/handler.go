@@ -7,6 +7,7 @@ import (
 	models "go_metrics/internal/model"
 	"go_metrics/internal/service"
 	"html/template"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +38,14 @@ func statusFor(err error) int {
 	}
 }
 
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	status := statusFor(err)
+	if status == http.StatusInternalServerError {
+		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+	}
+	w.WriteHeader(status)
+}
+
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.Update(
 		chi.URLParam(r, "type"),
@@ -44,7 +53,7 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		chi.URLParam(r, "value"),
 	)
 	if err != nil {
-		w.WriteHeader(statusFor(err))
+		writeError(w, r, err)
 		return
 	}
 
@@ -57,7 +66,7 @@ func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
 
 	m, err := h.svc.Get(chi.URLParam(r, "type"), chi.URLParam(r, "name"))
 	if err != nil {
-		w.WriteHeader(statusFor(err))
+		writeError(w, r, err)
 		return
 	}
 
@@ -85,6 +94,7 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := metricsPage.Execute(&buf, data); err != nil {
+		log.Printf("%s %s: render metrics page: %v", r.Method, r.URL.Path, err)
 		http.Error(w, "failed to render metrics page", http.StatusInternalServerError)
 		return
 	}
