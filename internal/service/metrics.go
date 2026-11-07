@@ -15,11 +15,21 @@ var (
 	ErrNotFound     = errors.New("metric not found")
 )
 
-type MetricsService struct {
-	storage repository.Storage
+type Storage interface {
+	UpdateGauge(name string, value float64)
+	GetGauge(name string) (float64, error)
+	GetAllGauges() map[string]float64
+
+	UpdateCounter(name string, value int64)
+	GetCounter(name string) (int64, error)
+	GetAllCounters() map[string]int64
 }
 
-func NewMetricsService(storage repository.Storage) *MetricsService {
+type MetricsService struct {
+	storage Storage
+}
+
+func NewMetricsService(storage Storage) *MetricsService {
 	return &MetricsService{storage: storage}
 }
 

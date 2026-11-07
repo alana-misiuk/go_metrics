@@ -9,16 +9,6 @@ type MemStorage struct {
 	counters map[string]int64
 }
 
-type Storage interface {
-	UpdateGauge(name string, value float64)
-	GetGauge(name string) (float64, error)
-	GetAllGauges() map[string]float64
-
-	UpdateCounter(name string, value int64)
-	GetCounter(name string) (int64, error)
-	GetAllCounters() map[string]int64
-}
-
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		gauges:   make(map[string]float64),
