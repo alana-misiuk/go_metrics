@@ -3,9 +3,9 @@ package repository
 import "errors"
 
 type MemStorage struct {
-	gauges map[string] float64
-	counters map[string] int64
-} 
+	gauges   map[string]float64
+	counters map[string]int64
+}
 
 type Storage interface {
 	UpdateGauge(name string, value float64)
@@ -15,13 +15,13 @@ type Storage interface {
 	UpdateCounter(name string, value int64)
 	GetCounter(name string) (int64, error)
 	GetAllCounters() map[string]int64
-} 
+}
 
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
-        gauges:   make(map[string]float64),
-        counters: make(map[string]int64),
-    }
+		gauges:   make(map[string]float64),
+		counters: make(map[string]int64),
+	}
 }
 
 func (s *MemStorage) UpdateGauge(name string, value float64) {

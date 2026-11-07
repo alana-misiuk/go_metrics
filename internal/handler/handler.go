@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"go_metrics/internal/repository"
+	"html/template"
 	"net/http"
 	"strconv"
 
@@ -18,11 +20,6 @@ func NewHandler(storage repository.Storage) *Handler {
 }
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	metricType := chi.URLParam(r, "type")
 	name := chi.URLParam(r, "name")
 	rawValue := chi.URLParam(r, "value")
@@ -82,18 +79,29 @@ func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var metricsPage = template.Must(template.New("metrics").Parse(`<html><body><h1>Metrics</h1><ul>
+{{- range $name, $value := .Gauges}}<li>{{$name}} (gauge) = {{$value}}</li>{{end}}
+{{- range $name, $value := .Counters}}<li>{{$name}} (counter) = {{$value}}</li>{{end -}}
+</ul></body></html>`))
+
+type metricsPageData struct {
+	Gauges   map[string]float64
+	Counters map[string]int64
+}
+
 func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-
-	html := "<html><body><h1>Metrics</h1><ul>"
-	for name, value := range h.storage.GetAllGauges() {
-		html += fmt.Sprintf("<li>%s (gauge) = %v</li>", name, value)
+	data := metricsPageData{
+		Gauges:   h.storage.GetAllGauges(),
+		Counters: h.storage.GetAllCounters(),
 	}
-	for name, value := range h.storage.GetAllCounters() {
-		html += fmt.Sprintf("<li>%s (counter) = %v</li>", name, value)
-	}
-	html += "</ul></body></html>"
 
+	var buf bytes.Buffer
+	if err := metricsPage.Execute(&buf, data); err != nil {
+		http.Error(w, "failed to render metrics page", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, html)
+	buf.WriteTo(w)
 }

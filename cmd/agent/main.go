@@ -1,32 +1,36 @@
 package main
 
 import (
+	"errors"
 	"flag"
-	"fmt"
 	"go_metrics/internal/agent"
+	"go_metrics/internal/config"
+	"os"
 	"time"
 )
 
 func main() {
-	addr := flag.String("a", "localhost:8080", "server address")
-	pollInterval := flag.Int("p", 2, "poll interval in seconds")
-	reportInterval := flag.Int("r", 10, "report interval in seconds")
-	flag.Parse()
+	cfg, err := config.ParseAgent(os.Args[1:])
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
 
-	serverURL := fmt.Sprintf("http://%s", *addr)
 	stats := &agent.AgentStats{}
 
 	go func() {
 		for {
 			agent.CollectMetrics(stats)
-			time.Sleep(time.Duration(*pollInterval) * time.Second)
+			time.Sleep(time.Duration(cfg.Collector.PollInterval) * time.Second)
 		}
 	}()
 
 	go func() {
 		for {
-			agent.SendMetrics(stats, serverURL)
-			time.Sleep(time.Duration(*reportInterval) * time.Second)
+			agent.SendMetrics(stats, cfg.Sender)
+			time.Sleep(time.Duration(cfg.Sender.ReportInterval) * time.Second)
 		}
 	}()
 

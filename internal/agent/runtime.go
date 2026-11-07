@@ -2,12 +2,15 @@ package agent
 
 import (
 	"fmt"
+	"go_metrics/internal/config"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
+	"sync"
 )
 
 type AgentStats struct {
+	mu            sync.Mutex
 	Alloc         float64
 	BuckHashSys   float64
 	Frees         float64
@@ -42,6 +45,10 @@ type AgentStats struct {
 func CollectMetrics(stats *AgentStats) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
+
+	stats.mu.Lock()
+	defer stats.mu.Unlock()
+
 	stats.Alloc = float64(mem.Alloc)
 	stats.BuckHashSys = float64(mem.BuckHashSys)
 	stats.Frees = float64(mem.Frees)
@@ -73,9 +80,8 @@ func CollectMetrics(stats *AgentStats) {
 	stats.RandomValue = rand.Float64()
 }
 
-func SendMetrics(stats *AgentStats, serverURL string) {
-	base := serverURL + "/update"
-
+func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
+	stats.mu.Lock()
 	gauges := map[string]float64{
 		"Alloc":         stats.Alloc,
 		"BuckHashSys":   stats.BuckHashSys,
@@ -106,6 +112,10 @@ func SendMetrics(stats *AgentStats, serverURL string) {
 		"TotalAlloc":    stats.TotalAlloc,
 		"RandomValue":   stats.RandomValue,
 	}
+	pollCount := stats.PollCount
+	stats.mu.Unlock()
+
+	base := fmt.Sprintf("http://%s/update", cfg.Addr)
 
 	for name, value := range gauges {
 		url := fmt.Sprintf("%s/gauge/%s/%v", base, name, value)
@@ -114,7 +124,7 @@ func SendMetrics(stats *AgentStats, serverURL string) {
 		}
 	}
 
-	url := fmt.Sprintf("%s/counter/PollCount/%d", base, stats.PollCount)
+	url := fmt.Sprintf("%s/counter/PollCount/%d", base, pollCount)
 	if resp, err := http.Post(url, "text/plain", nil); err == nil {
 		resp.Body.Close()
 	}

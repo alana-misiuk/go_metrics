@@ -1,25 +1,29 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"go_metrics/internal/config"
 	"go_metrics/internal/handler"
 	"go_metrics/internal/repository"
+	"log"
 	"net/http"
-
-	"github.com/go-chi/chi/v5"
+	"os"
 )
 
 func main() {
-	addr := flag.String("a", "localhost:8080", "server address")
-	flag.Parse()
+	cfg, err := config.ParseServer(os.Args[1:])
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
 
 	storage := repository.NewMemStorage()
 	h := handler.NewHandler(storage)
 
-	r := chi.NewRouter()
-	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)
-	r.Get("/value/{type}/{name}", h.GetMetric)
-	r.Get("/", h.GetAllMetrics)
+	r := handler.NewRouter(h)
 
-	http.ListenAndServe(*addr, r)
+	log.Fatal(http.ListenAndServe(cfg.Addr, r))
 }
