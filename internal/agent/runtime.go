@@ -119,13 +119,28 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 
 	for name, value := range gauges {
 		url := fmt.Sprintf("%s/gauge/%s/%v", base, name, value)
-		if resp, err := http.Post(url, "text/plain", nil); err == nil {
-			resp.Body.Close()
-		}
+		_ = post(url)
 	}
 
 	url := fmt.Sprintf("%s/counter/PollCount/%d", base, pollCount)
-	if resp, err := http.Post(url, "text/plain", nil); err == nil {
-		resp.Body.Close()
+	if err := post(url); err != nil {
+		return
 	}
+
+	stats.mu.Lock()
+	stats.PollCount -= pollCount
+	stats.mu.Unlock()
+}
+
+func post(url string) error {
+	resp, err := http.Post(url, "text/plain", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
+	}
+	return nil
 }
