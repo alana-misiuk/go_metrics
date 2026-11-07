@@ -1,6 +1,9 @@
 package repository
 
-import "errors"
+import (
+	"errors"
+	"maps"
+)
 
 var ErrNotFound = errors.New("metric not found")
 
@@ -43,9 +46,9 @@ func (s *MemStorage) GetCounter(name string) (int64, error) {
 }
 
 func (s *MemStorage) GetAllGauges() map[string]float64 {
-	return s.gauges
+	return maps.Clone(s.gauges)
 }
 
 func (s *MemStorage) GetAllCounters() map[string]int64 {
-	return s.counters
+	return maps.Clone(s.counters)
 }
