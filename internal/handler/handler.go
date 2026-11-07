@@ -2,50 +2,49 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"go_metrics/internal/repository"
+	models "go_metrics/internal/model"
+	"go_metrics/internal/service"
 	"html/template"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
 
-type Handler struct {
-	storage repository.Storage
+type MetricsService interface {
+	Update(metricType, name, rawValue string) error
+	Get(metricType, name string) (models.Metrics, error)
+	GetAll() (gauges map[string]float64, counters map[string]int64)
 }
 
-func NewHandler(storage repository.Storage) *Handler {
-	return &Handler{storage: storage}
+type Handler struct {
+	svc MetricsService
+}
+
+func NewHandler(svc MetricsService) *Handler {
+	return &Handler{svc: svc}
+}
+
+func statusFor(err error) int {
+	switch {
+	case errors.Is(err, service.ErrNameRequired), errors.Is(err, service.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, service.ErrUnknownType), errors.Is(err, service.ErrInvalidValue):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	metricType := chi.URLParam(r, "type")
-	name := chi.URLParam(r, "name")
-	rawValue := chi.URLParam(r, "value")
-
-	if name == "" {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	switch metricType {
-	case "gauge":
-		value, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		h.storage.UpdateGauge(name, value)
-	case "counter":
-		value, err := strconv.ParseInt(rawValue, 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		h.storage.UpdateCounter(name, value)
-	default:
-		w.WriteHeader(http.StatusBadRequest)
+	err := h.svc.Update(
+		chi.URLParam(r, "type"),
+		chi.URLParam(r, "name"),
+		chi.URLParam(r, "value"),
+	)
+	if err != nil {
+		w.WriteHeader(statusFor(err))
 		return
 	}
 
@@ -54,28 +53,19 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
-	metricType := chi.URLParam(r, "type")
-	name := chi.URLParam(r, "name")
-
 	w.Header().Set("Content-Type", "text/plain")
 
-	switch metricType {
-	case "gauge":
-		value, err := h.storage.GetGauge(name)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		fmt.Fprint(w, value)
-	case "counter":
-		value, err := h.storage.GetCounter(name)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		fmt.Fprint(w, value)
-	default:
-		w.WriteHeader(http.StatusBadRequest)
+	m, err := h.svc.Get(chi.URLParam(r, "type"), chi.URLParam(r, "name"))
+	if err != nil {
+		w.WriteHeader(statusFor(err))
+		return
+	}
+
+	switch m.MType {
+	case models.Gauge:
+		fmt.Fprint(w, *m.Value)
+	case models.Counter:
+		fmt.Fprint(w, *m.Delta)
 	}
 }
 
@@ -90,10 +80,8 @@ type metricsPageData struct {
 }
 
 func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
-	data := metricsPageData{
-		Gauges:   h.storage.GetAllGauges(),
-		Counters: h.storage.GetAllCounters(),
-	}
+	gauges, counters := h.svc.GetAll()
+	data := metricsPageData{Gauges: gauges, Counters: counters}
 
 	var buf bytes.Buffer
 	if err := metricsPage.Execute(&buf, data); err != nil {

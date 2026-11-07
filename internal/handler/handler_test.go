@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"go_metrics/internal/repository"
+	"go_metrics/internal/service"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 func newTestHandler() *Handler {
-	return NewHandler(repository.NewMemStorage())
+	return NewHandler(service.NewMetricsService(repository.NewMemStorage()))
 }
 
 func withChiParams(r *http.Request, params map[string]string) *http.Request {
@@ -104,7 +105,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge("Alloc", 1.5)
 	storage.UpdateCounter("PollCount", 3)
-	h := NewHandler(storage)
+	h := NewHandler(service.NewMetricsService(storage))
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -126,7 +127,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 func TestGetAllMetrics_EscapesNames(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge(`<script>alert("x")</script>&`, 1)
-	h := NewHandler(storage)
+	h := NewHandler(service.NewMetricsService(storage))
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))

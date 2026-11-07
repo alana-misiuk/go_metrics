@@ -6,6 +6,7 @@ import (
 	"go_metrics/internal/config"
 	"go_metrics/internal/handler"
 	"go_metrics/internal/repository"
+	"go_metrics/internal/service"
 	"log"
 	"net/http"
 	"os"
@@ -21,7 +22,8 @@ func main() {
 	}
 
 	storage := repository.NewMemStorage()
-	h := handler.NewHandler(storage)
+	svc := service.NewMetricsService(storage)
+	h := handler.NewHandler(svc)
 
 	r := handler.NewRouter(h)
 
