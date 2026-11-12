@@ -1,6 +1,9 @@
 package config
 
-import "flag"
+import (
+	"flag"
+	"os"
+)
 
 type ServerConfig struct {
 	Addr string
@@ -15,5 +18,10 @@ func ParseServer(args []string) (ServerConfig, error) {
 	if err := fs.Parse(args); err != nil {
 		return ServerConfig{}, err
 	}
+
+	if v := os.Getenv("ADDRESS"); v != "" {
+		cfg.Addr = v
+	}
+
 	return cfg, nil
 }
