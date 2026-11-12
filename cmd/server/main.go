@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"go_metrics/internal/config"
 	"go_metrics/internal/handler"
+	"go_metrics/internal/logger"
 	"go_metrics/internal/repository"
 	"go_metrics/internal/service"
 	"log"
@@ -21,10 +23,14 @@ func main() {
 		os.Exit(2)
 	}
 
+	if err := logger.Initialize(cfg.FlagLogLevel); err != nil {
+		fmt.Fprintln(os.Stderr, "log level:", err)
+		os.Exit(2)
+	}
+
 	storage := repository.NewMemStorage()
 	svc := service.NewMetricsService(storage)
 	h := handler.NewHandler(svc)
-
 	r := handler.NewRouter(h)
 
 	log.Fatal(http.ListenAndServe(cfg.Addr, r))
