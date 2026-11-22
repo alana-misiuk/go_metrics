@@ -22,11 +22,12 @@ type MetricsService interface {
 }
 
 type Handler struct {
-	svc MetricsService
+	svc      MetricsService
+	onUpdate func()
 }
 
-func NewHandler(svc MetricsService) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc MetricsService, onUpdate func()) *Handler {
+	return &Handler{svc: svc, onUpdate: onUpdate}
 }
 
 func statusFor(err error) int {
@@ -59,6 +60,7 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.afterUpdate()
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 }
@@ -118,7 +120,14 @@ func (h *Handler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	h.afterUpdate()
 	writeJSON(w, r, m)
+}
+
+func (h *Handler) afterUpdate() {
+	if h.onUpdate != nil {
+		h.onUpdate()
+	}
 }
 
 func (h *Handler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {

@@ -13,7 +13,7 @@ import (
 )
 
 func newTestHandler() *Handler {
-	return NewHandler(service.NewMetricsService(repository.NewMemStorage()))
+	return NewHandler(service.NewMetricsService(repository.NewMemStorage()), nil)
 }
 
 func withChiParams(t *testing.T, r *http.Request, params map[string]string) *http.Request {
@@ -107,7 +107,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge("Alloc", 1.5)
 	storage.UpdateCounter("PollCount", 3)
-	h := NewHandler(service.NewMetricsService(storage))
+	h := NewHandler(service.NewMetricsService(storage), nil)
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -129,7 +129,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 func TestGetAllMetrics_EscapesNames(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge(`<script>alert("x")</script>&`, 1)
-	h := NewHandler(service.NewMetricsService(storage))
+	h := NewHandler(service.NewMetricsService(storage), nil)
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))
