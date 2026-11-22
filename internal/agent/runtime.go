@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"go_metrics/internal/config"
@@ -135,12 +136,29 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 }
 
 func post(url string, m models.Metrics) error {
-	body, err := json.Marshal(m)
+	data, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return err
+	}
+	if err := gz.Close(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 func NewRouter(h *Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(logger.RequestLogger)
+	r.Use(GzipMiddleware)
 
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)
 	r.Get("/value/{type}/{name}", h.GetMetric)

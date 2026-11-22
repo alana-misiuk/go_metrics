@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"go_metrics/internal/config"
 	models "go_metrics/internal/model"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,10 +43,25 @@ type fakeServer struct {
 
 func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var m models.Metrics
+
+	body := r.Body
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		gz, err := gzip.NewReader(r.Body)
+		if err != nil {
+			f.mu.Lock()
+			f.badReqs = append(f.badReqs, "bad gzip")
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer gz.Close()
+		body = io.NopCloser(gz)
+	}
+
 	if r.Method != http.MethodPost ||
 		r.URL.Path != "/update" ||
 		r.Header.Get("Content-Type") != "application/json" ||
-		json.NewDecoder(r.Body).Decode(&m) != nil {
+		json.NewDecoder(body).Decode(&m) != nil {
 		f.mu.Lock()
 		f.badReqs = append(f.badReqs, r.Method+" "+r.URL.Path+" "+r.Header.Get("Content-Type"))
 		f.mu.Unlock()
