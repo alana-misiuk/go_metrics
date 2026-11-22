@@ -14,5 +14,9 @@ func NewRouter(h *Handler) http.Handler {
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)
 	r.Get("/value/{type}/{name}", h.GetMetric)
 	r.Get("/", h.GetAllMetrics)
+	r.Post("/update", h.UpdateMetricJSON)
+	r.Post("/update/", h.UpdateMetricJSON)
+	r.Post("/value", h.GetMetricJSON)
+	r.Post("/value/", h.GetMetricJSON)
 	return r
 }

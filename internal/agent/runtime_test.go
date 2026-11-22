@@ -1,10 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"go_metrics/internal/config"
+	models "go_metrics/internal/model"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -32,24 +33,35 @@ func TestCollectMetrics_AllocNonZero(t *testing.T) {
 type fakeServer struct {
 	mu        sync.Mutex
 	status    int
-	received  []int64
+	metrics   []models.Metrics // все принятые метрики
+	received  []int64          // приращения PollCount
+	badReqs   []string         // запросы, не похожие на JSON-протокол
 	onCounter func()
 }
 
 func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	const prefix = "/update/counter/PollCount/"
-	if strings.HasPrefix(r.URL.Path, prefix) {
-		v, err := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, prefix), 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+	var m models.Metrics
+	if r.Method != http.MethodPost ||
+		r.URL.Path != "/update" ||
+		r.Header.Get("Content-Type") != "application/json" ||
+		json.NewDecoder(r.Body).Decode(&m) != nil {
 		f.mu.Lock()
-		f.received = append(f.received, v)
+		f.badReqs = append(f.badReqs, r.Method+" "+r.URL.Path+" "+r.Header.Get("Content-Type"))
 		f.mu.Unlock()
-		if f.onCounter != nil {
-			f.onCounter()
-		}
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	isPollCount := m.ID == "PollCount" && m.MType == models.Counter && m.Delta != nil
+	f.mu.Lock()
+	f.metrics = append(f.metrics, m)
+	if isPollCount {
+		f.received = append(f.received, *m.Delta)
+	}
+	f.mu.Unlock()
+
+	if isPollCount && f.onCounter != nil {
+		f.onCounter()
 	}
 	w.WriteHeader(f.status)
 }
@@ -59,6 +71,48 @@ func startFakeServer(t *testing.T, f *fakeServer) config.SenderConfig {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
 	return config.SenderConfig{Addr: strings.TrimPrefix(srv.URL, "http://")}
+}
+
+func TestSendMetrics_SendsJSON(t *testing.T) {
+	f := &fakeServer{status: http.StatusOK}
+	cfg := startFakeServer(t, f)
+	stats := &AgentStats{}
+
+	CollectMetrics(stats)
+	SendMetrics(stats, cfg)
+
+	if len(f.badReqs) > 0 {
+		t.Fatalf("requests do not follow the JSON protocol: %v", f.badReqs)
+	}
+
+	const wantCount = 29
+	if len(f.metrics) != wantCount {
+		t.Errorf("sent %d metrics, want %d", len(f.metrics), wantCount)
+	}
+
+	sent := make(map[string]models.Metrics, len(f.metrics))
+	for _, m := range f.metrics {
+		sent[m.ID] = m
+	}
+
+	for _, name := range []string{"Alloc", "GCCPUFraction", "LastGC", "RandomValue", "TotalAlloc"} {
+		m, ok := sent[name]
+		if !ok {
+			t.Errorf("gauge %s was not sent", name)
+			continue
+		}
+		if m.MType != models.Gauge || m.Value == nil || m.Delta != nil {
+			t.Errorf("gauge %s sent as %+v, want type gauge with value only", name, m)
+		}
+	}
+
+	pc, ok := sent["PollCount"]
+	if !ok {
+		t.Fatal("PollCount was not sent")
+	}
+	if pc.MType != models.Counter || pc.Delta == nil || *pc.Delta != 1 || pc.Value != nil {
+		t.Errorf("PollCount sent as %+v, want type counter with delta 1", pc)
+	}
 }
 
 func TestSendMetrics_SendsDeltaAndResets(t *testing.T) {

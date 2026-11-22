@@ -1,8 +1,12 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"go_metrics/internal/config"
+	models "go_metrics/internal/model"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
@@ -115,15 +119,13 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 	pollCount := stats.PollCount
 	stats.mu.Unlock()
 
-	base := fmt.Sprintf("http://%s/update", cfg.Addr)
+	url := fmt.Sprintf("http://%s/update", cfg.Addr)
 
 	for name, value := range gauges {
-		url := fmt.Sprintf("%s/gauge/%s/%v", base, name, value)
-		_ = post(url)
+		_ = post(url, models.Metrics{ID: name, MType: models.Gauge, Value: &value})
 	}
 
-	url := fmt.Sprintf("%s/counter/PollCount/%d", base, pollCount)
-	if err := post(url); err != nil {
+	if err := post(url, models.Metrics{ID: "PollCount", MType: models.Counter, Delta: &pollCount}); err != nil {
 		return
 	}
 
@@ -132,15 +134,21 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 	stats.mu.Unlock()
 }
 
-func post(url string) error {
-	resp, err := http.Post(url, "text/plain", nil)
+func post(url string, m models.Metrics) error {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
+		return fmt.Errorf("unexpected status %d for %s %s", resp.StatusCode, m.MType, m.ID)
 	}
 	return nil
 }

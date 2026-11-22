@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	models "go_metrics/internal/model"
@@ -15,6 +16,7 @@ import (
 
 type MetricsService interface {
 	Update(metricType, name, rawValue string) error
+	UpdateMetric(m models.Metrics) (models.Metrics, error)
 	Get(metricType, name string) (models.Metrics, error)
 	GetAll() (gauges map[string]float64, counters map[string]int64)
 }
@@ -102,4 +104,47 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	buf.WriteTo(w)
+}
+
+func (h *Handler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	m, err := h.svc.UpdateMetric(req)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, m)
+}
+
+func (h *Handler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	m, err := h.svc.Get(req.MType, req.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, r, m)
+}
+
+func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("%s %s: encode response: %v", r.Method, r.URL.Path, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
