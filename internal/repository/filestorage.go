@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	models "go_metrics/internal/model"
 	"os"
+	"path/filepath"
 )
 
 type FileStorage struct {
@@ -33,7 +34,22 @@ func (f *FileStorage) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(f.path, data, 0644)
+	tmp, err := os.CreateTemp(filepath.Dir(f.path), ".metrics-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Rename(tmpName, f.path)
 }
 
 func (f *FileStorage) Restore() error {
