@@ -46,13 +46,9 @@ func main() {
 
 	svc := service.NewMetricsService(storage)
 
-	var syncSave func()
+	var syncSave func() error
 	if fs != nil && cfg.StoreInterval == 0 {
-		syncSave = func() {
-			if err := fs.Save(); err != nil {
-				log.Printf("sync save: %v", err)
-			}
-		}
+		syncSave = fs.Save
 	}
 
 	h := handler.NewHandler(svc, syncSave)
