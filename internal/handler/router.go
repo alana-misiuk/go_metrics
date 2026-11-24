@@ -1,15 +1,15 @@
 package handler
 
 import (
-	"go_metrics/internal/logger"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
-func NewRouter(h *Handler) http.Handler {
+func NewRouter(h *Handler, log *zap.Logger) http.Handler {
 	r := chi.NewRouter()
-	r.Use(logger.RequestLogger)
+	r.Use(RequestLogger(log))
 	r.Use(GzipMiddleware)
 
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)

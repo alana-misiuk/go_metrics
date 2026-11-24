@@ -28,7 +28,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := logger.Initialize(cfg.FlagLogLevel); err != nil {
+	log, err := logger.Initialize(cfg.FlagLogLevel)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "log level:", err)
 		os.Exit(2)
 	}
@@ -37,10 +38,9 @@ func main() {
 
 	var fs *repository.FileStorage
 	if cfg.FileStoragePath != "" {
-		var err error
 		fs, err = repository.NewFileStorage(cfg.FileStoragePath, storage, cfg.Restore)
 		if err != nil {
-			logger.Log.Error("restore metrics", zap.Error(err))
+			log.Error("restore metrics", zap.Error(err))
 		}
 	}
 
@@ -51,8 +51,8 @@ func main() {
 		syncSave = fs.Save
 	}
 
-	h := handler.NewHandler(svc, syncSave)
-	r := handler.NewRouter(h)
+	h := handler.NewHandler(svc, log, syncSave)
+	r := handler.NewRouter(h, log)
 
 	if fs != nil && cfg.StoreInterval > 0 {
 		go func() {
@@ -60,7 +60,7 @@ func main() {
 			defer ticker.Stop()
 			for range ticker.C {
 				if err := fs.Save(); err != nil {
-					logger.Log.Error("periodic save", zap.Error(err))
+					log.Error("periodic save", zap.Error(err))
 				}
 			}
 		}()
@@ -72,11 +72,11 @@ func main() {
 		go func() {
 			<-sigCh
 			if err := fs.Save(); err != nil {
-				logger.Log.Error("save on shutdown", zap.Error(err))
+				log.Error("save on shutdown", zap.Error(err))
 			}
 			os.Exit(0)
 		}()
 	}
 
-	logger.Log.Fatal("server stopped", zap.Error(http.ListenAndServe(cfg.Addr, r)))
+	log.Fatal("server stopped", zap.Error(http.ListenAndServe(cfg.Addr, r)))
 }
