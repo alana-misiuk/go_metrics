@@ -1,8 +1,13 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"go_metrics/internal/config"
+	models "go_metrics/internal/model"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
@@ -115,15 +120,13 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 	pollCount := stats.PollCount
 	stats.mu.Unlock()
 
-	base := fmt.Sprintf("http://%s/update", cfg.Addr)
+	url := fmt.Sprintf("http://%s/update", cfg.Addr)
 
 	for name, value := range gauges {
-		url := fmt.Sprintf("%s/gauge/%s/%v", base, name, value)
-		_ = post(url)
+		_ = post(url, models.Metrics{ID: name, MType: models.Gauge, Value: &value})
 	}
 
-	url := fmt.Sprintf("%s/counter/PollCount/%d", base, pollCount)
-	if err := post(url); err != nil {
+	if err := post(url, models.Metrics{ID: "PollCount", MType: models.Counter, Delta: &pollCount}); err != nil {
 		return
 	}
 
@@ -132,15 +135,38 @@ func SendMetrics(stats *AgentStats, cfg config.SenderConfig) {
 	stats.mu.Unlock()
 }
 
-func post(url string) error {
-	resp, err := http.Post(url, "text/plain", nil)
+func post(url string, m models.Metrics) error {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return err
+	}
+	if err := gz.Close(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
+		return fmt.Errorf("unexpected status %d for %s %s", resp.StatusCode, m.MType, m.ID)
 	}
 	return nil
 }

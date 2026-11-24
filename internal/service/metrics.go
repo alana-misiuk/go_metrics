@@ -38,27 +38,51 @@ func (s *MetricsService) Update(metricType, name, rawValue string) error {
 		return ErrNameRequired
 	}
 
+	m := models.Metrics{ID: name, MType: metricType}
 	switch metricType {
 	case models.Gauge:
 		value, err := strconv.ParseFloat(rawValue, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %q is not a float", ErrInvalidValue, rawValue)
 		}
-		if err := s.storage.UpdateGauge(name, value); err != nil {
-			return fmt.Errorf("update gauge %q: %w", name, err)
-		}
+		m.Value = &value
 	case models.Counter:
 		value, err := strconv.ParseInt(rawValue, 10, 64)
 		if err != nil {
 			return fmt.Errorf("%w: %q is not an integer", ErrInvalidValue, rawValue)
 		}
-		if err := s.storage.UpdateCounter(name, value); err != nil {
-			return fmt.Errorf("update counter %q: %w", name, err)
+		m.Delta = &value
+	}
+
+	_, err := s.UpdateMetric(m)
+	return err
+}
+
+func (s *MetricsService) UpdateMetric(m models.Metrics) (models.Metrics, error) {
+	if m.ID == "" {
+		return models.Metrics{}, ErrNameRequired
+	}
+
+	switch m.MType {
+	case models.Gauge:
+		if m.Value == nil {
+			return models.Metrics{}, fmt.Errorf("%w: gauge %q has no value", ErrInvalidValue, m.ID)
+		}
+		if err := s.storage.UpdateGauge(m.ID, *m.Value); err != nil {
+			return models.Metrics{}, fmt.Errorf("update gauge %q: %w", m.ID, err)
+		}
+	case models.Counter:
+		if m.Delta == nil {
+			return models.Metrics{}, fmt.Errorf("%w: counter %q has no delta", ErrInvalidValue, m.ID)
+		}
+		if err := s.storage.UpdateCounter(m.ID, *m.Delta); err != nil {
+			return models.Metrics{}, fmt.Errorf("update counter %q: %w", m.ID, err)
 		}
 	default:
-		return fmt.Errorf("%w: %q", ErrUnknownType, metricType)
+		return models.Metrics{}, fmt.Errorf("%w: %q", ErrUnknownType, m.MType)
 	}
-	return nil
+
+	return s.Get(m.MType, m.ID)
 }
 
 func (s *MetricsService) Get(metricType, name string) (models.Metrics, error) {

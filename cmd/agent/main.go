@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"go_metrics/internal/agent"
 	"go_metrics/internal/config"
 	"os"
@@ -15,6 +16,7 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 

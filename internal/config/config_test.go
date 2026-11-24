@@ -101,3 +101,31 @@ func TestParse_Help(t *testing.T) {
 		t.Errorf("ParseServer(-h) err = %v, want flag.ErrHelp", err)
 	}
 }
+
+func TestParseServer_LogLevel(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		env  string
+		want string
+	}{
+		{name: "default", want: "info"},
+		{name: "flag", args: []string{"-l", "debug"}, want: "debug"},
+		{name: "env", env: "warn", want: "warn"},
+		{name: "env overrides flag", args: []string{"-l", "debug"}, env: "warn", want: "warn"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("LOG_LEVEL", tt.env)
+
+			got, err := ParseServer(tt.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.FlagLogLevel != tt.want {
+				t.Errorf("FlagLogLevel = %q, want %q", got.FlagLogLevel, tt.want)
+			}
+		})
+	}
+}

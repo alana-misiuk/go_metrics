@@ -10,10 +10,11 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func newTestHandler() *Handler {
-	return NewHandler(service.NewMetricsService(repository.NewMemStorage()))
+	return NewHandler(service.NewMetricsService(repository.NewMemStorage()), zap.NewNop(), nil)
 }
 
 func withChiParams(t *testing.T, r *http.Request, params map[string]string) *http.Request {
@@ -92,7 +93,7 @@ func TestUpdateMetric_WithoutName(t *testing.T) {
 }
 
 func TestUpdateMetric_WrongMethod(t *testing.T) {
-	r := NewRouter(newTestHandler())
+	r := NewRouter(newTestHandler(), zap.NewNop())
 	req := httptest.NewRequest(http.MethodGet, "/update/gauge/Alloc/1.5", nil)
 	w := httptest.NewRecorder()
 
@@ -107,7 +108,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge("Alloc", 1.5)
 	storage.UpdateCounter("PollCount", 3)
-	h := NewHandler(service.NewMetricsService(storage))
+	h := NewHandler(service.NewMetricsService(storage), zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -129,7 +130,7 @@ func TestGetAllMetrics_ListsMetrics(t *testing.T) {
 func TestGetAllMetrics_EscapesNames(t *testing.T) {
 	storage := repository.NewMemStorage()
 	storage.UpdateGauge(`<script>alert("x")</script>&`, 1)
-	h := NewHandler(service.NewMetricsService(storage))
+	h := NewHandler(service.NewMetricsService(storage), zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	h.GetAllMetrics(w, httptest.NewRequest(http.MethodGet, "/", nil))

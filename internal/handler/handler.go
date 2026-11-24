@@ -2,29 +2,34 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	models "go_metrics/internal/model"
 	"go_metrics/internal/service"
 	"html/template"
-	"log"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 )
 
 type MetricsService interface {
 	Update(metricType, name, rawValue string) error
+	UpdateMetric(m models.Metrics) (models.Metrics, error)
 	Get(metricType, name string) (models.Metrics, error)
 	GetAll() (gauges map[string]float64, counters map[string]int64)
 }
 
 type Handler struct {
-	svc MetricsService
+	svc      MetricsService
+	log      *zap.Logger
+	onUpdate func() error
 }
 
-func NewHandler(svc MetricsService) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc MetricsService, log *zap.Logger, onUpdate func() error) *Handler {
+	return &Handler{svc: svc, log: log, onUpdate: onUpdate}
 }
 
 func statusFor(err error) int {
@@ -38,10 +43,10 @@ func statusFor(err error) int {
 	}
 }
 
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
+func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status := statusFor(err)
 	if status == http.StatusInternalServerError {
-		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+		h.log.Error("request error", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
 	}
 	w.WriteHeader(status)
 }
@@ -53,10 +58,14 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		chi.URLParam(r, "value"),
 	)
 	if err != nil {
-		writeError(w, r, err)
+		h.writeError(w, r, err)
 		return
 	}
 
+	if err := h.afterUpdate(); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 }
@@ -66,7 +75,7 @@ func (h *Handler) GetMetric(w http.ResponseWriter, r *http.Request) {
 
 	m, err := h.svc.Get(chi.URLParam(r, "type"), chi.URLParam(r, "name"))
 	if err != nil {
-		writeError(w, r, err)
+		h.writeError(w, r, err)
 		return
 	}
 
@@ -94,7 +103,7 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := metricsPage.Execute(&buf, data); err != nil {
-		log.Printf("%s %s: render metrics page: %v", r.Method, r.URL.Path, err)
+		h.log.Error("render metrics page", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
 		http.Error(w, "failed to render metrics page", http.StatusInternalServerError)
 		return
 	}
@@ -102,4 +111,58 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	buf.WriteTo(w)
+}
+
+func (h *Handler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	m, err := h.svc.UpdateMetric(req)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	if err := h.afterUpdate(); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, r, m)
+}
+
+func (h *Handler) afterUpdate() error {
+	if h.onUpdate != nil {
+		return h.onUpdate()
+	}
+	return nil
+}
+
+func (h *Handler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	m, err := h.svc.Get(req.MType, req.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, r, m)
+}
+
+func (h *Handler) writeJSON(w http.ResponseWriter, r *http.Request, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		h.log.Error("encode response", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
