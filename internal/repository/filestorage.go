@@ -12,8 +12,14 @@ type FileStorage struct {
 	mem  *MemStorage
 }
 
-func NewFileStorage(path string, mem *MemStorage) *FileStorage {
-	return &FileStorage{path: path, mem: mem}
+func NewFileStorage(path string, mem *MemStorage, restore bool) (*FileStorage, error) {
+	fs := &FileStorage{path: path, mem: mem}
+	if restore {
+		if err := fs.restore(); err != nil {
+			return nil, err
+		}
+	}
+	return fs, nil
 }
 
 func (f *FileStorage) Save() error {
@@ -52,7 +58,7 @@ func (f *FileStorage) Save() error {
 	return os.Rename(tmpName, f.path)
 }
 
-func (f *FileStorage) Restore() error {
+func (f *FileStorage) restore() error {
 	data, err := os.ReadFile(f.path)
 	if err != nil {
 		if os.IsNotExist(err) {

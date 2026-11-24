@@ -37,12 +37,10 @@ func main() {
 
 	var fs *repository.FileStorage
 	if cfg.FileStoragePath != "" {
-		fs = repository.NewFileStorage(cfg.FileStoragePath, storage)
-
-		if cfg.Restore {
-			if err := fs.Restore(); err != nil {
-				logger.Log.Error("restore metrics", zap.Error(err))
-			}
+		var err error
+		fs, err = repository.NewFileStorage(cfg.FileStoragePath, storage, cfg.Restore)
+		if err != nil {
+			logger.Log.Error("restore metrics", zap.Error(err))
 		}
 	}
 
