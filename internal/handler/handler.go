@@ -7,9 +7,11 @@ import (
 	"fmt"
 	models "go_metrics/internal/model"
 	"go_metrics/internal/service"
+	"go_metrics/internal/logger"
 	"html/template"
-	"log"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -44,7 +46,7 @@ func statusFor(err error) int {
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status := statusFor(err)
 	if status == http.StatusInternalServerError {
-		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+		logger.Log.Error("request error", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
 	}
 	w.WriteHeader(status)
 }
@@ -101,7 +103,7 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := metricsPage.Execute(&buf, data); err != nil {
-		log.Printf("%s %s: render metrics page: %v", r.Method, r.URL.Path, err)
+		logger.Log.Error("render metrics page", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
 		http.Error(w, "failed to render metrics page", http.StatusInternalServerError)
 		return
 	}
@@ -155,7 +157,7 @@ func (h *Handler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
-		log.Printf("%s %s: encode response: %v", r.Method, r.URL.Path, err)
+		logger.Log.Error("encode response", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

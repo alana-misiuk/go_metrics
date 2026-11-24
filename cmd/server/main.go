@@ -9,12 +9,13 @@ import (
 	"go_metrics/internal/logger"
 	"go_metrics/internal/repository"
 	"go_metrics/internal/service"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -39,7 +40,7 @@ func main() {
 
 		if cfg.Restore {
 			if err := fs.Restore(); err != nil {
-				log.Printf("restore metrics: %v", err)
+				logger.Log.Error("restore metrics", zap.Error(err))
 			}
 		}
 	}
@@ -60,7 +61,7 @@ func main() {
 			defer ticker.Stop()
 			for range ticker.C {
 				if err := fs.Save(); err != nil {
-					log.Printf("periodic save: %v", err)
+					logger.Log.Error("periodic save", zap.Error(err))
 				}
 			}
 		}()
@@ -72,11 +73,11 @@ func main() {
 		go func() {
 			<-sigCh
 			if err := fs.Save(); err != nil {
-				log.Printf("save on shutdown: %v", err)
+				logger.Log.Error("save on shutdown", zap.Error(err))
 			}
 			os.Exit(0)
 		}()
 	}
 
-	log.Fatal(http.ListenAndServe(cfg.Addr, r))
+	logger.Log.Fatal("server stopped", zap.Error(http.ListenAndServe(cfg.Addr, r)))
 }
