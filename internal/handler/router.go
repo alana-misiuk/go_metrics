@@ -19,5 +19,6 @@ func NewRouter(h *Handler, log *zap.Logger) http.Handler {
 	r.Post("/update/", h.UpdateMetricJSON)
 	r.Post("/value", h.GetMetricJSON)
 	r.Post("/value/", h.GetMetricJSON)
+	r.Get("/ping", h.Ping)
 	return r
 }

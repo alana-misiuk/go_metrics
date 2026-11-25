@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +46,19 @@ func main() {
 		}
 	}
 
+	var db *sql.DB
+	if cfg.DatabaseDSN != "" {
+		db, err = sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			log.Fatal("open database", zap.Error(err))
+		}
+		defer db.Close()
+		if err = db.Ping(); err != nil {
+			log.Fatal("ping database", zap.Error(err))
+		}
+		log.Info("connected to database")
+	}
+
 	svc := service.NewMetricsService(storage)
 
 	var syncSave func() error
@@ -51,7 +66,7 @@ func main() {
 		syncSave = fs.Save
 	}
 
-	h := handler.NewHandler(svc, log, syncSave)
+	h := handler.NewHandler(svc, log, syncSave, db)
 	r := handler.NewRouter(h, log)
 
 	if fs != nil && cfg.StoreInterval > 0 {
