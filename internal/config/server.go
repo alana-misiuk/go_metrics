@@ -12,6 +12,7 @@ type ServerConfig struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
+	DatabaseDSN     string
 }
 
 func ParseServer(args []string) (ServerConfig, error) {
@@ -23,6 +24,7 @@ func ParseServer(args []string) (ServerConfig, error) {
 	fs.IntVar(&cfg.StoreInterval, "i", 300, "store interval in seconds (0 = synchronous)")
 	fs.StringVar(&cfg.FileStoragePath, "f", "/tmp/metrics-db.json", "file storage path")
 	fs.BoolVar(&cfg.Restore, "r", true, "restore metrics on startup")
+	fs.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
 
 	if err := fs.Parse(args); err != nil {
 		return ServerConfig{}, err
@@ -39,6 +41,9 @@ func ParseServer(args []string) (ServerConfig, error) {
 	}
 	if v := os.Getenv("FILE_STORAGE_PATH"); v != "" {
 		cfg.FileStoragePath = v
+	}
+	if v := os.Getenv("DATABASE_DSN"); v != "" {
+		cfg.DatabaseDSN = v
 	}
 	if v := os.Getenv("RESTORE"); v != "" {
 		b, err := strconv.ParseBool(v)

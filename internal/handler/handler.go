@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,10 +27,24 @@ type Handler struct {
 	svc      MetricsService
 	log      *zap.Logger
 	onUpdate func() error
+	db       *sql.DB
 }
 
-func NewHandler(svc MetricsService, log *zap.Logger, onUpdate func() error) *Handler {
-	return &Handler{svc: svc, log: log, onUpdate: onUpdate}
+func NewHandler(svc MetricsService, log *zap.Logger, onUpdate func() error, db *sql.DB) *Handler {
+	return &Handler{svc: svc, log: log, onUpdate: onUpdate, db: db}
+}
+
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err := h.db.PingContext(r.Context()); err != nil {
+		h.log.Error("database ping failed", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func statusFor(err error) int {
